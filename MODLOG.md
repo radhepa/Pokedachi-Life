@@ -115,6 +115,18 @@ code mod (exefs `code.ips`) later for per-Mii species and the Pokédex creation 
   (`0x3C4218`, `0x3C4260`, `0x3C4BE8`). Tabs, photo button, hair flip and colours hidden in
   `layout_editor` (`build_editor.py`); 720 icons (32×28 in 32×32 RGBA5551, 2 KB each, stretched by
   the 52×44 buttons) added to the archive (`darc.repack(additions=...)`).
+- Jump tabs: the hair page's 8 colour buttons (+0x30c + i×0x5c, selected index +0xa3c). Buttons 0–5
+  became Gen I–V / Forms tabs (pages 1, 13, 21, 33, 42, 54); 6–7 hidden. Layout (`build_editor.add_tabs`):
+  swatch material konst0 → white, swatch 32 px, plus a child pic pane `I_Color_0i` (I_Part_00's pane and
+  material as templates) showing `PkTab<i>.bclim` (txl1 + mat1 appended). The swatch material itself
+  can't show an icon: its texture is an A4 mask tinted by konst0, and its Select/Decide animations
+  drive texMap 1 (ring) + konst1, so it's kept for the highlight. Code: colour tap `0x32d1f8` →
+  cave `tab_tap(i, this)` (page, icons, counter text, picked-icon highlight) then the game's colour
+  sound; both arrow `bl 0x32b3b8` → `icons_tabs`; page open `0x32c524/0x32c52c` picks the tab from
+  the page instead of the hair colour.
+- keystone resolves `bl <absolute>` wrongly after `.byte` data in the same asm (every call target
+  shifted by the data size), so all cave code comes before all cave data and `codepatch.py` checks
+  every call target against the known functions.
 - Text: editor title "Pokédex"; Town Hall entry dialog "Who's moving in?" / "Choose from Pokédex".
 
 ### File-format traps (Pokémon rendered solid black or as noise)
@@ -189,7 +201,12 @@ code mod (exefs `code.ips`) later for per-Mii species and the Pokédex creation 
   auto-repeat and skip pages, so check each sheet's page label; `citra.py launch` no longer steals focus.)
   Installed into my own Citra (`build_mod.sh --real` now backs the island up by itself first).
 
+- 2026-10-09: **Gen I–V + Forms jump tabs** beside the Pokédex grid (starter icons; Unown for forms).
+  Verified in the test Citra: each tab opens its page, the arrows move the lit tab, a pick made after a
+  tab jump (Serperior) saves and reopens on page 42 with Gen V lit. README: the clipped nap shot is
+  replaced by the tabs.
+
 ## Next
 1. Polish: sitting/lying offsets, close-ups in other scenes, newsImage scenes that frame a head.
-2. Faster Pokédex browsing: 60 pages behind one pair of arrows. Idea: show the 8 (hidden) hair-colour
-   buttons as Gen 1–5 / Forms jump tabs with starter icons.
+2. Swapping layout files while Citra runs and reopening the editor showed blank tab icons; a fresh
+   boot is fine (3 reopen cycles checked). Always restart the test Citra after reinstalling.

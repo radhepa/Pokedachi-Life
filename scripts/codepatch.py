@@ -37,6 +37,13 @@ for e in DEX:
     if e.get("model_f"):
         FEMALE[e["slot"] >> 3] |= 1 << (e["slot"] & 7)
 assert SPECIES <= 132 * 8
+# Jump tabs (the hair page's colour buttons 0..5): Gen I-V, then the alternate forms. Each tab opens
+# the page holding the first entry of its group.
+GENS = [(1, 151), (152, 251), (252, 386), (387, 493), (494, 649)]
+TAB_PAGES = [min(e["slot"] for e in DEX if e["form"] == 0 and a <= e["dex"] <= b) // PER_PAGE for a, b in GENS]
+TAB_PAGES.append(min(e["slot"] for e in DEX if e["form"]) // PER_PAGE)
+NTABS = len(TAB_PAGES)                   # 6 (colour buttons 6 and 7 are hidden in the layout)
+assert TAB_PAGES == sorted(TAB_PAGES) and NTABS <= 8
 
 
 def utf16z(s):
@@ -55,7 +62,9 @@ DIVMOD = 0x30209C            # (a, b) -> r0 = a / b, r1 = a % b
 REFRESH = 0x3C3C44           # editor: rebuild the preview Mii from the edit params (scene)
 CHANGE_OUTFIT = 0x33394C     # (actor, outfit, colour): outfit path + reload (calls BODY_FN)
 PAGE_ICONS = 0x32B3B8        # (page, per_page): puts the page's icons on the 12 grid buttons
-BUTTON_ON = 0x4A8024         # (button, on, s0 = anim speed): selected-state highlight
+BUTTON_ON = 0x4A8024         # (button, on, s0 = anim frame): selected-state highlight (on: 3.0, off: 0.0)
+WSPRINTF = 0x100648          # (buf, size, fmt, ...) Thumb, called with blx (page counter text)
+PAGE_FMT = 0x32C928          # L"%d" used by the arrow handler for the page counter
 
 # --- Free space: padding after .text (0x84f390..0x850000 is mapped r-x and all zero) ---------------
 CAVE = 0x84F390
@@ -174,19 +183,121 @@ build_path:
     add     sp, sp, #0x88
     pop     {r4, r5, r6, pc}
 
+cur_gen:
+    ldrb    r1, [r0, #0x38]
+    adr     r2, tab_pages
+    mov     r0, #%(ntabs_last)d
+cur_gen_next:
+    ldrb    r3, [r2, r0]
+    cmp     r1, r3
+    bxhs    lr
+    subs    r0, r0, #1
+    bpl     cur_gen_next
+    mov     r0, #0
+    bx      lr
+
+update_tabs:
+    push    {r4, r5, r6, lr}
+    mov     r4, r0
+    bl      cur_gen
+    strb    r0, [r4, #0xa3c]
+    mov     r6, r0
+    mov     r5, #0
+update_tabs_next:
+    rsb     r0, r5, r5, lsl #3
+    add     r0, r0, r5, lsl #4
+    add     r0, r4, r0, lsl #2
+    add     r0, r0, #0x300
+    add     r0, r0, #0xc
+    cmp     r5, r6
+    moveq   r1, #1
+    movne   r1, #0
+    vldr    s0, f_zero
+    vldreq  s0, f_three
+    bl      %(button_on)#x
+    add     r5, r5, #1
+    cmp     r5, #%(ntabs)d
+    blt     update_tabs_next
+    pop     {r4, r5, r6, pc}
+
+icons_tabs:
+    push    {r4, lr}
+    mov     r4, r0
+    bl      %(page_icons)#x
+    mov     r0, r4
+    bl      update_tabs
+    pop     {r4, pc}
+
+tab_tap:
+    push    {r4, r5, lr}
+    sub     sp, sp, #0x8c
+    mov     r4, r1
+    cmp     r0, #%(ntabs)d
+    bhs     tab_tap_done
+    adr     r2, tab_pages
+    ldrb    r0, [r2, r0]
+    strb    r0, [r4, #0x38]
+    mov     r0, r4
+    ldrb    r1, [r4, #0x3a]
+    bl      %(page_icons)#x
+    ldrb    r0, [r4, #0x38]
+    ldr     r2, page_fmt
+    mov     r1, #0x40
+    add     r3, r0, #1
+    add     r0, sp, #8
+    blx     %(wsprintf)#x
+    ldr     r0, [r4, #0xa40]
+    mov     r2, #0
+    ldr     r1, [r0]
+    ldr     r3, [r1, #0x78]
+    add     r1, sp, #8
+    blx     r3
+    ldrb    r0, [r4, #0xa3d]
+    rsb     r1, r0, r0, lsl #3
+    add     r0, r1, r0, lsl #4
+    add     r0, r4, r0, lsl #2
+    add     r0, r0, #0x400
+    add     r0, r0, #0x1ec
+    ldrb    r2, [r4, #0x38]
+    ldrb    r3, [r4, #0xa3e]
+    cmp     r2, r3
+    moveq   r1, #1
+    movne   r1, #0
+    vldr    s0, f_zero
+    vldreq  s0, f_three
+    bl      %(button_on)#x
+    mov     r0, r4
+    bl      update_tabs
+tab_tap_done:
+    add     sp, sp, #0x8c
+    pop     {r4, r5, pc}
+
+
 species:
     .word   %(species)d
+page_fmt:
+    .word   %(page_fmt)#x
+f_zero:
+    .word   0
+f_three:
+    .word   0x40400000
 fmt_m:
 %(fmt_m)s
+    .align  2
 fmt_f:
 %(fmt_f)s
     .align  2
 female:
 %(female)s
     .align  2
+tab_pages:
+    .byte   %(tab_pages)s
+    .align  2
 """ % dict(swprintf=SWPRINTF, wstrcopy=WSTRCOPY, divmod=DIVMOD, refresh=REFRESH, change=CHANGE_OUTFIT,
            species=SPECIES, fmt_m=words(utf16z("rom:/model/body/body_pk%03d_LZ.bin")),
-           fmt_f=words(utf16z("rom:/model/body/body_pk%03dF_LZ.bin")), female=words(FEMALE))
+           fmt_f=words(utf16z("rom:/model/body/body_pk%03dF_LZ.bin")), female=words(FEMALE),
+           ntabs=NTABS, ntabs_last=NTABS - 1, button_on=BUTTON_ON, page_icons=PAGE_ICONS, wsprintf=WSPRINTF,
+           page_fmt=PAGE_FMT, tab_pages=", ".join(str(p) for p in TAB_PAGES))
 
 BODY_FN = 0x73246C
 
@@ -268,6 +379,21 @@ EDITOR_TAB_ON_ENTER = 0x3C4218    # mov r1, #0 -> FUN_00163f88(tabState, 0)
 EDITOR_CAM_ON_ENTER = 0x3C4260    # mov r1, #0 -> FUN_004eb57c(camCtrl, 0)
 EDITOR_CAM_LEAVE_BODY = 0x3C4BE8  # mov r1, #0 -> FUN_004eb57c(camCtrl, 0)
 
+# Patch 8: jump tabs. The hair page's 8 colour buttons (+0x30c + i * 0x5c, selected index +0xa3c)
+# become TAB_PAGES jump tabs (icons and placement in build_editor.py; buttons 6-7 hidden there).
+# - tap (FUN_0032d084 colour branch): instead of setting the hair colour and rebuilding the preview,
+#   tab_tap(i, this) turns to the tab's page, redraws the icons and the page counter, keeps the
+#   picked icon's highlight only on its own page, then the game plays its colour-button sound.
+# - the page arrows (both 'bl 0x32b3b8' in FUN_0032c778) go through icons_tabs, and opening the
+#   page (FUN_0032c46c) selects the tab from the page instead of the hair colour, so the lit tab
+#   always matches the page you're on.
+TABS_TAP = 0x32D1F8          # str r0, [r7, #0x24] ... (colour i -> edit params, refresh)
+TABS_TAP_END = 0x32D204
+TABS_TAP_SOUND = 0x32D260    # SE_MII_EDIT_COLOR, then the shared un-highlight tail
+TABS_ARROWS = (0x32C7C4, 0x32C838)
+TABS_OPEN = 0x32C524         # ldr r0, [r6, #0x24] (hair colour) -> current tab
+TABS_OPEN_GEN = 0x32C52C     # and r0, r0, #0xff
+
 
 def tap_asm():
     return """
@@ -297,10 +423,23 @@ def assemble(asm, addr, labels=None):
     return bytes(enc)
 
 
+# All cave code comes before all cave data: keystone resolves 'bl <address>' wrongly after .byte data
+# (every call target came out shifted by the data's size), and main() checks every call target.
+CAVE_LABELS = ("pick", "body", "cur_gen", "update_tabs", "icons_tabs", "tab_tap", "species")
+CAVE_DATA = ("species", "page_fmt", "f_zero", "f_three", "fmt_m", "fmt_f", "female", "tab_pages")
+CALL_TARGETS = {SWPRINTF, WSTRCOPY, DIVMOD, REFRESH, CHANGE_OUTFIT, PAGE_ICONS, BUTTON_ON, WSPRINTF}
+
+
 def cave_labels():
-    """Addresses of the cave's functions (keystone doesn't report labels): pick comes first and is
-    self-contained, so body starts right after it."""
-    return dict(pick=CAVE, body=CAVE + len(assemble(CAVE_ASM.split("body:\n")[0], CAVE)))
+    """Addresses of the cave's labels (keystone doesn't report them): assemble everything before the
+    label, with any data label it refers to but doesn't reach yet stubbed at the end. ARM code is 4 bytes
+    per instruction, so the prefix length is the label's offset."""
+    out = {}
+    for name in CAVE_LABELS:
+        head = CAVE_ASM.split("\n" + name + ":\n")[0] + "\n"
+        stubs = "".join(lab + ":\n" for lab in CAVE_DATA if "\n" + lab + ":\n" not in head)
+        out[name] = CAVE + len(assemble(head + stubs, CAVE))
+    return out
 
 
 def ips(patches):
@@ -347,7 +486,13 @@ def main():
         ("editor_tab", EDITOR_TAB_ON_ENTER, EDITOR_TAB_ON_ENTER + 4, "mov r1, #1", ["mov r1, #0"]),
         ("editor_cam", EDITOR_CAM_ON_ENTER, EDITOR_CAM_ON_ENTER + 4, "mov r1, #1", ["mov r1, #0"]),
         ("editor_cam_body", EDITOR_CAM_LEAVE_BODY, EDITOR_CAM_LEAVE_BODY + 4, "mov r1, #1", ["mov r1, #0"]),
+        ("tabs_tap", TABS_TAP, TABS_TAP_END, "mov r1, r4\nbl %#x\nb %#x" % (labels["tab_tap"], TABS_TAP_SOUND),
+         ["str r0, [r7, #0x24]", "ldr r1, [r8, #0x9c]", "ldrb r0, [r1, #0x390]"]),
+        ("tabs_open", TABS_OPEN, TABS_OPEN + 4, "mov r0, r4", ["ldr r0, [r6, #0x24]"]),
+        ("tabs_open_gen", TABS_OPEN_GEN, TABS_OPEN_GEN + 4, "bl %#x" % labels["cur_gen"], ["and r0, r0, #0xff"]),
     ]
+    for addr in TABS_ARROWS:
+        patches.append(("tabs_arrow", addr, addr + 4, "bl %#x" % labels["icons_tabs"], ["bl #0x32b3b8"]))
     flip_expect = [["add r0, r0, r0, lsl #1"], ["add r0, r5, r0, lsl #2"]] * 2
     for addr, expect in zip(FLIP_IDX, flip_expect):
         patches.append(("flip_index", addr, addr + 4, "mov r0, #0", expect))
@@ -373,13 +518,16 @@ def main():
         code[off:off + len(blob)] = blob
         records.append((off, blob))
         if not isinstance(src, bytes):
-            n = len(blob)
-            if name == "cave":                     # list the code only, not the data after it
-                n = len(assemble(CAVE_ASM.split("species:")[0] + "species:\nfmt_m:\nfmt_f:\nfemale:\n", addr))
+            n = len(blob) if name != "cave" else labels["species"] - CAVE   # code only, not the data
             for ins in md.disasm(blob[:n], addr):
                 print("  %08x  %-8s %s" % (ins.address, ins.mnemonic, ins.op_str))
-    print("Pokédex: %d entries, %d pages, %d icons, %d female models; cave %d/%d bytes"
-          % (SPECIES, PAGES, SLOTS, sum(bin(b).count("1") for b in FEMALE), len(records[0][1]), CAVE_END - CAVE))
+                if ins.mnemonic in ("bl", "blx") and ins.op_str.startswith("#"):
+                    target = int(ins.op_str[1:], 16)
+                    if target not in CALL_TARGETS | set(labels.values()) | {pick}:
+                        raise SystemExit("%s: call at %#x goes to %#x, not a known function" % (name, ins.address, target))
+    print("Pokédex: %d entries, %d pages, %d icons, %d female models, tabs open pages %s; cave %d/%d bytes"
+          % (SPECIES, PAGES, SLOTS, sum(bin(b).count("1") for b in FEMALE), [p + 1 for p in TAB_PAGES],
+             len(records[0][1]), CAVE_END - CAVE))
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "code.ips"), "wb") as f:
         f.write(ips(records))
