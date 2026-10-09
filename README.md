@@ -27,7 +27,7 @@
 |  | Tomodachi Life | **Pokédachi Life** |
 |---|---|---|
 | 🏝️ Islanders | Miis | **Rumble Blast Pokémon** with Tomodachi's own animations |
-| 🎨 Making a resident | Mii Maker (face, hair, eyes…) | **A Pokédex**: 717 entries over 60 pages, with jump tabs for Gen I–V and the forms |
+| 🎨 Making a resident | Mii Maker (face, hair, eyes…) | **A Pokédex**: 717 entries over 60 pages, with tabs I–V for each generation and VI for the forms |
 | ♀️♂️ Gender | Picks clothes | Still asked, and **96 species switch to their female model** (pink Jellicent, heart-tailed Pikachu…) |
 | 🗣️ Name, voice, personality | ✔️ | ✔️ unchanged |
 | ✋ Grabbing | Pinch the top of the head, slide up | Same gesture: every Pokémon is scaled so its head is where the game expects a Mii's |
@@ -36,9 +36,8 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/img/pokedex.png" width="260"><br><sub><b>The Pokédex</b> replaces the Mii Maker.<br>Here a girl picks Jellicent and gets the pink one.</sub></td>
-    <td align="center"><img src="docs/img/home.png" width="300"><br><sub><b>Moved in.</b> The game treats it like any other Mii.</sub><br><br><img src="docs/img/tabs.png" width="300"><br><sub><b>Jump tabs.</b> Tap a starter to leap to its generation.<br>The lit tab follows whatever page you're on.</sub></td>
-    <td align="center"><img src="docs/img/grab.png" width="260"><br><sub><b>Grab it by the head</b> and it dangles, just like a Mii.</sub><br><br><img src="docs/img/news.png" width="260"><br><sub><b>Mii News</b>, Pokémon edition.</sub></td>
+    <td align="center"><img src="docs/img/pokedex.png" width="300"><br><sub><b>The Pokédex</b> replaces the Mii Maker. Tabs <b>I–V</b> jump<br>to each generation, <b>VI</b> to the alternate forms.<br>Here a girl picks Jellicent and gets the pink one.</sub><br><br><img src="docs/img/news.png" width="300"><br><sub><b>Mii News</b>, Pokémon edition.</sub></td>
+    <td align="center"><img src="docs/img/home.png" width="300"><br><sub><b>Moved in.</b> The game treats it like any other Mii.</sub><br><br><img src="docs/img/grab.png" width="300"><br><sub><b>Grab it by the head</b> and it dangles, just like a Mii.</sub></td>
   </tr>
 </table>
 
@@ -56,8 +55,8 @@ flowchart TD
 
 > [!TIP]
 > Already have islanders? **Town Hall → Edit Mii → Pokédex** lets you pick a new Pokémon for any of them.
-> The tabs beside the grid jump straight to a generation: Bulbasaur for Gen I, Chikorita for II, Treecko
-> for III, Turtwig for IV, Snivy for V and Unown for the alternate forms.
+> The tabs beside the grid jump straight to a generation: **I** to **V** for Gen I–V, **VI** for the
+> alternate forms. The lit tab always shows which section you're in.
 
 ---
 
@@ -272,7 +271,7 @@ Pokémon reuse the Mii body material so room lighting looks right.
 The Mii Maker's hair page became the Pokédex. A small code patch (`code.ips`) grows it from 132 hair
 icons on 11 pages to 720 icons on 60 pages, stores your pick in the hair style + hair colour, and makes
 the body loader open `body_pk<slot>[F]` instead of an outfit. The hair-colour buttons next to the grid
-became the jump tabs: each shows a starter (Unown for the forms), turns to its section's first page,
+became the jump tabs: Roman numerals I–V for the generations and VI for the forms. Each turns to its section's first page,
 and the lit tab follows the page you're on, arrows included. The new code lives in unused space at the
 end of the game's code, and every patched spot is checked against the expected original instructions
 before it's written.

@@ -11,7 +11,7 @@ import os
 import struct
 import sys
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paths import DATA  # noqa: E402
@@ -32,9 +32,12 @@ HIDE = {
     "blyt/EditorCommon.bclyt": ["N_BtnTabs", "N_Camera"],      # face/hair/eyes/... tabs, photo button
     "blyt/EditHair.bclyt": ["N_BtnChanges", "B_Color_06", "B_Color_07"],  # hair flip, 2 spare colours
 }
-# The other 6 hair-colour buttons become jump tabs (codepatch.py: Gen I-V, then the alternate forms),
-# each showing a Pokémon: (tab, Rumble icon).
-TABS = [(0, "N001_u_00"), (1, "N152_u_00"), (2, "N252_u_00"), (3, "N387_u_00"), (4, "N495_u_00"), (5, "N201_u_27")]
+# The other 6 hair-colour buttons become jump tabs (codepatch.py: Gen I-V, then VI = the alternate
+# forms), labelled with Roman numerals: (tab, label).
+TABS = [(0, "I"), (1, "II"), (2, "III"), (3, "IV"), (4, "V"), (5, "VI")]
+TAB_TEX = (64, 56)              # label texture (logical size, stored 64x64), same 8:7 shape as TAB_ICON
+TAB_INK = (43, 37, 32, 255)     # the dark ink of the game's page counter
+TAB_FONTS = ["ARLRDBD.TTF", "seguibl.ttf", "arialbd.ttf"]   # Arial Rounded MT Bold first, as on the UI
 TAB_X, TAB_TOP, TAB_STEP = 72.0, -8.0, 31.0   # column position (layout units, y up) and spacing
 TAB_DISC, TAB_HIT, TAB_ICON = (32.0, 32.0), (30.0, 30.0), (28.0, 24.5)
 HIDE_CITYHALL = {
@@ -166,22 +169,34 @@ def add_tabs(blyt):
     return _join(header, out)
 
 
-def tab_icon(name):
-    """A tab's Pokémon, scaled up to fill the tile (the grid keeps sprites at native size)."""
-    small = icon_for({"icon": name})
-    small = small.crop(small.getbbox())
-    s = min((ICON_W - 2) / small.width, (ICON_H - 2) / small.height)
-    small = small.resize((round(small.width * s), round(small.height * s)), Image.LANCZOS)
-    canvas = Image.new("RGBA", (ICON_W, ICON_H), (0, 0, 0, 0))
-    canvas.alpha_composite(small, ((ICON_W - small.width) // 2, (ICON_H - small.height) // 2))
-    return canvas
+def tab_font(size):
+    for name in TAB_FONTS:
+        path = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", name)
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default(size)
+
+
+def tab_label(text):
+    """A tab's Roman numeral, centred; one font size for all tabs, the largest that fits the widest."""
+    w, h = TAB_TEX
+    size = 48
+    while size > 8:
+        font = tab_font(size)
+        boxes = [font.getbbox(t) for _, t in TABS]
+        if max(b[2] - b[0] for b in boxes) <= w - 10 and max(b[3] - b[1] for b in boxes) <= h - 14:
+            break
+        size -= 1
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    l, t, r, b = font.getbbox(text)
+    ImageDraw.Draw(img).text(((w - (r - l)) / 2 - l, (h - (b - t)) / 2 - t), text, font=font, fill=TAB_INK)
+    return img
 
 
 def tab_textures():
     files = {}
-    for i, icon in TABS:
-        img = tab_icon(icon)
-        files["timg/PkTab%d.bclim" % i] = bclim.write_bclim(bclim.encode(img, "rgba5551"), ICON_W, ICON_H, "rgba5551")
+    for i, text in TABS:
+        files["timg/PkTab%d.bclim" % i] = bclim.write_bclim(bclim.encode(tab_label(text), "rgba4"), *TAB_TEX, "rgba4")
     return files
 
 

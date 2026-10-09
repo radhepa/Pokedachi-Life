@@ -118,7 +118,8 @@ code mod (exefs `code.ips`) later for per-Mii species and the Pokédex creation 
 - Jump tabs: the hair page's 8 colour buttons (+0x30c + i×0x5c, selected index +0xa3c). Buttons 0–5
   became Gen I–V / Forms tabs (pages 1, 13, 21, 33, 42, 54); 6–7 hidden. Layout (`build_editor.add_tabs`):
   swatch material konst0 → white, swatch 32 px, plus a child pic pane `I_Color_0i` (I_Part_00's pane and
-  material as templates) showing `PkTab<i>.bclim` (txl1 + mat1 appended). The swatch material itself
+  material as templates) showing `PkTab<i>.bclim`, a Roman numeral I–VI (Arial Rounded MT Bold,
+  RGBA4 for soft edges; txl1 + mat1 appended). The swatch material itself
   can't show an icon: its texture is an A4 mask tinted by konst0, and its Select/Decide animations
   drive texMap 1 (ring) + konst1, so it's kept for the highlight. Code: colour tap `0x32d1f8` →
   cave `tab_tap(i, this)` (page, icons, counter text, picked-icon highlight) then the game's colour
@@ -201,7 +202,8 @@ code mod (exefs `code.ips`) later for per-Mii species and the Pokédex creation 
   auto-repeat and skip pages, so check each sheet's page label; `citra.py launch` no longer steals focus.)
   Installed into my own Citra (`build_mod.sh --real` now backs the island up by itself first).
 
-- 2026-10-09: **Gen I–V + Forms jump tabs** beside the Pokédex grid (starter icons; Unown for forms).
+- 2026-10-09: **Gen I–V + Forms jump tabs** beside the Pokédex grid, labelled I–VI (VI = forms; first
+  tried starter icons).
   Verified in the test Citra: each tab opens its page, the arrows move the lit tab, a pick made after a
   tab jump (Serperior) saves and reopens on page 42 with Gen V lit. README: the clipped nap shot is
   replaced by the tabs.
