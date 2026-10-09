@@ -1,0 +1,122 @@
+diff --git a/SPICA/Formats/CtrGfx/Gfx.cs b/SPICA/Formats/CtrGfx/Gfx.cs
+index dc2dfc4..51de95f 100644
+--- a/SPICA/Formats/CtrGfx/Gfx.cs
++++ b/SPICA/Formats/CtrGfx/Gfx.cs
+@@ -76,7 +76,7 @@ namespace SPICA.Formats.CtrGfx
+ 
+         public static Gfx Open(string FileName)
+         {
+-            using (FileStream Input = new FileStream(FileName, FileMode.Open))
++            using (FileStream Input = new FileStream(FileName, FileMode.Open, FileAccess.Read, FileShare.Read))
+             {
+                 BinaryDeserializer Deserializer = new BinaryDeserializer(Input, GetSerializationOptions());
+ 
+@@ -634,6 +634,15 @@ namespace SPICA.Formats.CtrGfx
+ 
+                 Image.Header = new GfxSectionHeader("IMAG");
+ 
++                //Texture and vertex data must start on 128-byte boundaries, as in Nintendo's files;
++                //the GPU drops the low address bits, so unaligned textures are read shifted.
++                Image.ValueAlign = 0x80;
++
++                //The game relocates the IMAG data, so offsets inside it are what must be aligned:
++                //like Nintendo's files, the data right after the IMAG header starts on 0x80.
++                Image.DataAlign  = 0x80;
++                Image.HeaderSize = 8;
++
+                 Serializer.AddSection((uint)GfxSectionId.Strings, Strings, typeof(string));
+                 Serializer.AddSection((uint)GfxSectionId.Strings, Strings, typeof(GfxStringUtf8));
+                 Serializer.AddSection((uint)GfxSectionId.Strings, Strings, typeof(GfxStringUtf16LE));
+@@ -646,7 +655,10 @@ namespace SPICA.Formats.CtrGfx
+ 
+                 Header.SectionsCount = Image.Values.Count > 0 ? 2 : 1;
+ 
+-                Header.Data.Length = Contents.Length + Strings.Length + 8;
++                //DATA runs up to the IMAG header (including any alignment padding before it).
++                Header.Data.Length = Image.Values.Count > 0
++                    ? Image.Position - Image.HeaderLength - Header.HeaderLength
++                    : Contents.Length + Strings.Length + 8;
+ 
+                 FS.Seek(0, SeekOrigin.Begin);
+ 
+diff --git a/SPICA/Formats/CtrGfx/Model/Mesh/GfxBoundingBox.cs b/SPICA/Formats/CtrGfx/Model/Mesh/GfxBoundingBox.cs
+index 75261b2..383a068 100644
+--- a/SPICA/Formats/CtrGfx/Model/Mesh/GfxBoundingBox.cs
++++ b/SPICA/Formats/CtrGfx/Model/Mesh/GfxBoundingBox.cs
+@@ -1,4 +1,4 @@
+-﻿using SPICA.Math3D;
++using SPICA.Math3D;
+ 
+ using System.Numerics;
+ 
+@@ -6,6 +6,7 @@ namespace SPICA.Formats.CtrGfx.Model.Mesh
+ {
+     public class GfxBoundingBox
+     {
++        public uint      Type = 0x80000000; // ResOrientedBoundingBox type info (was missing)
+         public Vector3   Center;
+         public Matrix3x3 Orientation;
+         public Vector3   Size;
+diff --git a/SPICA/Serialization/BinarySerializer.cs b/SPICA/Serialization/BinarySerializer.cs
+index bcc9b10..29693b5 100644
+--- a/SPICA/Serialization/BinarySerializer.cs
++++ b/SPICA/Serialization/BinarySerializer.cs
+@@ -83,6 +83,14 @@ namespace SPICA.Serialization
+             }
+ 
+             //Write
++            if (Section.DataAlign > 1 && Section.Header != null)
++            {
++                while ((BaseStream.Position + Section.HeaderSize) % Section.DataAlign != 0)
++                {
++                    BaseStream.WriteByte(0);
++                }
++            }
++
+             long HeaderPosition = BaseStream.Position;
+ 
+             if (Section.Header != null)
+@@ -92,8 +100,12 @@ namespace SPICA.Serialization
+ 
+             Section.Position = (int)BaseStream.Position;
+ 
++            ValueAlign = Section.ValueAlign;
++
+             WriteSection(Section.Values);
+ 
++            ValueAlign = 1;
++
+             //Set section position and lengths, where:
+             //Length is the data length, and length with header is
+             //data length + header length.
+@@ -107,12 +119,16 @@ namespace SPICA.Serialization
+ 
+         private RefValue CurrentValue;
+ 
++        private int ValueAlign = 1;
++
+         private void WriteSection(List<RefValue> Values, int Start = 0)
+         {
+             for (int Index = Start; Index < Values.Count; Index++)
+             {
+                 CurrentValue = Values[Index];
+ 
++                if (ValueAlign > 1) Align(ValueAlign);
++
+                 WriteValue(Values[Index]);
+             }
+ 
+diff --git a/SPICA/Serialization/Serializer/Section.cs b/SPICA/Serialization/Serializer/Section.cs
+index c1ac4f0..c493076 100644
+--- a/SPICA/Serialization/Serializer/Section.cs
++++ b/SPICA/Serialization/Serializer/Section.cs
+@@ -16,6 +16,9 @@ namespace SPICA.Serialization.Serializer
+         public int LengthWithHeader;
+         public int HeaderLength;
+         public int Padding;
++        public int ValueAlign = 1; //Alignment of every value written into this section
++        public int DataAlign  = 1; //Pads before the header so the data after it starts aligned
++        public int HeaderSize;     //Header length in bytes (needed for DataAlign)
+ 
+         public Section(int Padding = 1)
+         {

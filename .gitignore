@@ -1,0 +1,42 @@
+# Never commit game data, saves or toolchains. Your island (save + extdata) lives in Citra's sdmc
+# folder and in Pokedachi-data/backups, both outside this repo; these rules are a second fence.
+tools/
+build/
+bin/
+obj/
+out/
+__pycache__/
+*.pyc
+
+# game files and anything extracted or built from them
+*.3ds
+*.cia
+*.cci
+*.cxi
+*.app
+*.bcres
+*.cx
+*_LZ.bin
+*.bclim
+*.bclyt
+*.msbt
+*.darc
+*.arc
+*.ips
+code.bin
+exheader.bin
+romfs/
+exefs/
+Pokedachi-data/
+
+# saves / islands / emulator state
+*.sav
+savedata*.txt
+savedataArc.txt
+datastore.bin
+sdmc/
+nand/
+extdata*/
+title-*/
+backups/
+citra-test*/
