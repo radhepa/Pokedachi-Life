@@ -47,14 +47,11 @@
 ## 🎬 Who's moving in?
 
 ```mermaid
-flowchart LR
-    A(["🏛️ Town Hall"]) --> B{"Who's moving in?"}
-    B -->|"Choose from Pokédex"| C["♀️ / ♂️<br/>Boy or girl?"]
-    C --> D["📖 Pokédex<br/>717 Pokémon · 60 pages"]
-    D --> E["✏️ Name"]
-    E --> F["🗣️ Voice"]
-    F --> G["💭 Personality"]
-    G --> H(["🏠 Moves into the apartments!"])
+flowchart TD
+    A(["🏛️ Town Hall: Who's moving in?"]) -->|"Choose from Pokédex"| C["♀️ ♂️ Boy or girl?"]
+    C --> D["📖 Pick from 717 Pokémon"]
+    D --> E["✏️ Name · 🗣️ Voice · 💭 Personality"]
+    E --> H(["🏠 Moves into the apartments!"])
 ```
 
 > [!TIP]
